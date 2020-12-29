@@ -27,6 +27,7 @@
 
 #include <stdint.h>
 
+#include "config.h"
 #include "libavutil/attributes.h"
 #include "libavutil/avassert.h"
 #include "libavutil/log.h"
@@ -44,6 +45,7 @@
 #include "mpegvideo.h"
 #include "profiles.h"
 
+#if CONFIG_MPEG1VIDEO_ENCODER || CONFIG_MPEG2VIDEO_ENCODER
 static const uint8_t svcd_scan_offset_placeholder[] = {
     0x10, 0x0E, 0x00, 0x80, 0x81, 0x00, 0x80,
     0x81, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -64,8 +66,9 @@ static uint8_t mpeg1_index_run[2][64];
 static int8_t  mpeg1_max_level[2][64];
 
 #define A53_MAX_CC_COUNT 0x1f
+#endif /* CONFIG_MPEG1VIDEO_ENCODER || CONFIG_MPEG2VIDEO_ENCODER */
 
-static av_cold void init_uni_ac_vlc(RLTable *rl, uint8_t *uni_ac_vlc_len)
+av_cold void ff_mpeg1_init_uni_ac_vlc(const RLTable *rl, uint8_t *uni_ac_vlc_len)
 {
     int i;
 
@@ -100,6 +103,7 @@ static av_cold void init_uni_ac_vlc(RLTable *rl, uint8_t *uni_ac_vlc_len)
     }
 }
 
+#if CONFIG_MPEG1VIDEO_ENCODER || CONFIG_MPEG2VIDEO_ENCODER
 static int find_frame_rate_index(MpegEncContext *s)
 {
     int i;
@@ -1045,8 +1049,8 @@ static av_cold void mpeg12_encode_init_static(void)
         mpeg1_index_run[0][i] = ff_rl_mpeg1.index_run[0][i];
     }
 
-    init_uni_ac_vlc(&ff_rl_mpeg1, uni_mpeg1_ac_vlc_len);
-    init_uni_ac_vlc(&ff_rl_mpeg2, uni_mpeg2_ac_vlc_len);
+    ff_mpeg1_init_uni_ac_vlc(&ff_rl_mpeg1, uni_mpeg1_ac_vlc_len);
+    ff_mpeg1_init_uni_ac_vlc(&ff_rl_mpeg2, uni_mpeg2_ac_vlc_len);
 
     /* build unified dc encoding tables */
     for (int i = -255; i < 256; i++) {
@@ -1136,8 +1140,6 @@ av_cold void ff_mpeg1_encode_init(MpegEncContext *s)
 #define COMMON_OPTS                                                           \
     { "gop_timecode",        "MPEG GOP Timecode in hh:mm:ss[:;.]ff format. Overrides timecode_frame_start.",   \
       OFFSET(tc_opt_str), AV_OPT_TYPE_STRING, {.str=NULL}, 0, 0, VE },\
-    { "intra_vlc",           "Use MPEG-2 intra VLC table.",                   \
-      OFFSET(intra_vlc_format),    AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE }, \
     { "drop_frame_timecode", "Timecode is in drop frame format.",             \
       OFFSET(drop_frame_timecode), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE }, \
     { "scan_offset",         "Reserve space for SVCD scan offset user data.", \
@@ -1153,6 +1155,8 @@ static const AVOption mpeg1_options[] = {
 
 static const AVOption mpeg2_options[] = {
     COMMON_OPTS
+    { "intra_vlc",        "Use MPEG-2 intra VLC table.",
+      OFFSET(intra_vlc_format),    AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE },
     { "non_linear_quant", "Use nonlinear quantizer.",    OFFSET(q_scale_type),   AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE },
     { "alternate_scan",   "Enable alternate scantable.", OFFSET(alternate_scan), AV_OPT_TYPE_BOOL, { .i64 = 0 }, 0, 1, VE },
     { "seq_disp_ext",     "Write sequence_display_extension blocks.", OFFSET(seq_disp_ext), AV_OPT_TYPE_INT, { .i64 = -1 }, -1, 1, VE, "seq_disp_ext" },
@@ -1222,3 +1226,4 @@ AVCodec ff_mpeg2video_encoder = {
     .caps_internal        = FF_CODEC_CAP_INIT_CLEANUP,
     .priv_class           = &mpeg2_class,
 };
+#endif /* CONFIG_MPEG1VIDEO_ENCODER || CONFIG_MPEG2VIDEO_ENCODER */

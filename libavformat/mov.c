@@ -1511,7 +1511,7 @@ static int mov_read_mvhd(MOVContext *c, AVIOContext *pb, MOVAtom atom)
     c->duration = (version == 1) ? avio_rb64(pb) : avio_rb32(pb); /* duration */
     // set the AVFormatContext duration because the duration of individual tracks
     // may be inaccurate
-    if (c->time_scale > 0 && !c->trex_data)
+    if (!c->trex_data)
         c->fc->duration = av_rescale(c->duration, AV_TIME_BASE, c->time_scale);
     avio_rb32(pb); /* preferred scale */
 
@@ -2100,6 +2100,7 @@ static void mov_parse_stsd_video(MOVContext *c, AVIOContext *pb,
     uint8_t codec_name[32] = { 0 };
     int64_t stsd_start;
     unsigned int len;
+    uint32_t id = 0;
 
     /* The first 16 bytes of the video sample description are already
      * read in ff_mov_read_stsd_entries() */
@@ -2107,7 +2108,8 @@ static void mov_parse_stsd_video(MOVContext *c, AVIOContext *pb,
 
     avio_rb16(pb); /* version */
     avio_rb16(pb); /* revision level */
-    avio_rb32(pb); /* vendor */
+    id = avio_rl32(pb); /* vendor */
+    av_dict_set(&st->metadata, "vendor_id", av_fourcc2str(id), 0);
     avio_rb32(pb); /* temporal quality */
     avio_rb32(pb); /* spatial quality */
 
@@ -2155,10 +2157,12 @@ static void mov_parse_stsd_audio(MOVContext *c, AVIOContext *pb,
 {
     int bits_per_sample, flags;
     uint16_t version = avio_rb16(pb);
+    uint32_t id = 0;
     AVDictionaryEntry *compatible_brands = av_dict_get(c->fc->metadata, "compatible_brands", NULL, AV_DICT_MATCH_CASE);
 
     avio_rb16(pb); /* revision level */
-    avio_rb32(pb); /* vendor */
+    id = avio_rl32(pb); /* vendor */
+    av_dict_set(&st->metadata, "vendor_id", av_fourcc2str(id), 0);
 
     st->codecpar->channels              = avio_rb16(pb); /* channel count */
     st->codecpar->bits_per_coded_sample = avio_rb16(pb); /* sample size */
@@ -4414,7 +4418,7 @@ static int mov_read_keys(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 
 static int mov_read_custom(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
-    int64_t end = avio_tell(pb) + atom.size;
+    int64_t end = av_sat_add64(avio_tell(pb), atom.size);
     uint8_t *key = NULL, *val = NULL, *mean = NULL;
     int i;
     int ret = 0;
@@ -5052,7 +5056,7 @@ static int mov_read_trun(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 static int mov_read_sidx(MOVContext *c, AVIOContext *pb, MOVAtom atom)
 {
     int64_t stream_size = avio_size(pb);
-    int64_t offset = avio_tell(pb) + atom.size, pts, timestamp;
+    int64_t offset = av_sat_add64(avio_tell(pb), atom.size), pts, timestamp;
     uint8_t version, is_complete;
     unsigned i, j, track_id, item_count;
     AVStream *st = NULL;
@@ -7002,6 +7006,8 @@ static int mov_read_default(MOVContext *c, AVIOContext *pb, MOVAtom atom)
                 uint32_t type;
                 avio_skip(pb, 4);
                 type = avio_rl32(pb);
+                if (avio_feof(pb))
+                    break;
                 avio_seek(pb, -8, SEEK_CUR);
                 if (type == MKTAG('m','v','h','d') ||
                     type == MKTAG('c','m','o','v')) {
